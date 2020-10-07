@@ -29,11 +29,26 @@ class DepthInference:
 
         self.model_wrapper = None
         self.network_input_shape = None
-        self.input_image_shape = None
+        self.rgb_img_msg = None
+        self.depth_img_msg = None
         self.set_model_wrapper()
 
-        rospy.Subscriber("/video/image_raw", Image, self.cb_image, queue_size=1)
-        rospy.spin()
+        # Communication
+        self.pub_rgb_image = rospy.Publisher('/rgb_image', Image, queue_size=None)
+        self.pub_depth_image = rospy.Publisher('/depth_image', Image, queue_size=None)
+
+        # queue_size=None to process only the last message
+        rospy.Subscriber("/video/image_raw", Image, self.cb_image, queue_size=None)
+
+        rate = rospy.Rate(10) # 10hz
+        while not rospy.is_shutdown():
+            if self.rgb_img_msg is None:
+                continue
+
+            self.process(self.rgb_img_msg)
+            rate.sleep()
+
+        # rospy.spin()
 
 
     def set_model_wrapper(self):
@@ -56,6 +71,26 @@ class DepthInference:
 
     def set_network_input_shape(self, config):
         self.network_input_shape = config.datasets.augmentation.image_shape
+
+    def process(self, rgb_img_msg):
+
+        try:
+            rgb_image = self.bridge.imgmsg_to_cv2(rgb_img_msg, "rgb8")
+        except CvBridgeError as e:
+            print(e)
+            
+        rgb_image = cv2.resize(rgb_image, (self.network_input_shape[1], self.network_input_shape[0]))
+        rgb_image = to_tensor(rgb_image).unsqueeze(0)
+
+        if torch.cuda.is_available():
+            rgb_image = rgb_image.to('cuda:{}'.format(rank()), dtype=None)
+        
+        pred_inv_depth = self.model_wrapper.depth(rgb_image)[0]
+        depth_img = self.write_depth(self.inv2depth(pred_inv_depth))
+        depth_img_msg = self.bridge.cv2_to_imgmsg(depth_img, encoding="mono16")
+
+        self.pub_rgb_image.publish(rgb_img_msg)
+        self.pub_depth_image.publish(depth_img_msg)
 
 
     def inv2depth(self, inv_depth):
@@ -101,28 +136,12 @@ class DepthInference:
             # cv2.imwrite("/home/jedsadakorn/packnet_ws/src/packnet_sfm/inferences/test.png", depth)
 
         return depth
-            
-
-
 
     def cb_image(self, data):
-        rospy.loginfo("Image recieved")
-
-        try:
-            image = self.bridge.imgmsg_to_cv2(data, "rgb8")
-        except CvBridgeError as e:
-            print(e)
-
-        self.input_image_shape = image.shape
-
-        image = cv2.resize(image, (self.network_input_shape[1], self.network_input_shape[0]))
-        image = to_tensor(image).unsqueeze(0)
-
-        if torch.cuda.is_available():
-            image = image.to('cuda:{}'.format(rank()), dtype=None)
-        
-        pred_inv_depth = self.model_wrapper.depth(image)[0]
-        # depth = self.write_depth(depth=self.inv2depth(pred_inv_depth))
+        rospy.loginfo(data.header.seq)
+        self.rgb_img_msg = data
+        self.input_image_shape = (data.height, data.width)
+        print(self.input_image_shape)
 
 
     
