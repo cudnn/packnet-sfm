@@ -15,7 +15,7 @@ import packnet_sfm
 from packnet_sfm.models.model_wrapper import ModelWrapper
 from packnet_sfm.datasets.augmentations import resize_image, to_tensor
 from packnet_sfm.utils.horovod import hvd_init, rank, world_size, print0
-from packnet_sfm.utils.image import load_image
+from packnet_sfm.utils.image import load_image, interpolate_image
 from packnet_sfm.utils.config import parse_test_file
 from packnet_sfm.utils.load import set_debug
 from packnet_sfm.utils.depth import write_depth, inv2depth, viz_inv_depth
@@ -29,16 +29,17 @@ class DepthInference:
 
         self.model_wrapper = None
         self.network_input_shape = None
+        self.original_input_shape = None
         self.rgb_img_msg = None
         self.depth_img_msg = None
         self.set_model_wrapper()
 
         # Communication
-        self.pub_rgb_image = rospy.Publisher('/rgb_image', Image, queue_size=None)
-        self.pub_depth_image = rospy.Publisher('/depth_image', Image, queue_size=None)
+        self.pub_rgb_image = rospy.Publisher('/camera/color/image_raw', Image, queue_size=100)
+        self.pub_depth_image = rospy.Publisher('/camera/depth/image_raw', Image, queue_size=100)
 
         # queue_size=None to process only the last message
-        rospy.Subscriber("/video/image_raw", Image, self.cb_image, queue_size=None)
+        rospy.Subscriber("/video/image_raw", Image, self.cb_image, queue_size=1)
 
         rate = rospy.Rate(10) # 10hz
         while not rospy.is_shutdown():
@@ -48,12 +49,10 @@ class DepthInference:
             self.process(self.rgb_img_msg)
             rate.sleep()
 
-        # rospy.spin()
-
 
     def set_model_wrapper(self):
 
-        config, state_dict = parse_test_file("/home/jedsadakorn/packnet_ws/src/packnet_sfm/models/PackNet01_HR_velsup_CStoK.ckpt")
+        config, state_dict = parse_test_file("/home/jedsadakorn/packnet_ws/src/packnet_sfm/models/PackNet01_MR_velsup_CStoK.ckpt")
         
         self.set_network_input_shape(config)
 
@@ -72,22 +71,42 @@ class DepthInference:
     def set_network_input_shape(self, config):
         self.network_input_shape = config.datasets.augmentation.image_shape
 
+
     def process(self, rgb_img_msg):
 
         try:
-            rgb_image = self.bridge.imgmsg_to_cv2(rgb_img_msg, "rgb8")
+            rgb_image = self.bridge.imgmsg_to_cv2(rgb_img_msg, "bgr8")
         except CvBridgeError as e:
             print(e)
             
+        # shrink the image to fit NN input
+        rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
+        # rgb_image = cv2.resize(rgb_image, (self.network_input_shape[1], self.network_input_shape[0]), interpolation=cv2.INTER_LANCZOS4)
         rgb_image = cv2.resize(rgb_image, (self.network_input_shape[1], self.network_input_shape[0]))
         rgb_image = to_tensor(rgb_image).unsqueeze(0)
 
         if torch.cuda.is_available():
             rgb_image = rgb_image.to('cuda:{}'.format(rank()), dtype=None)
         
-        pred_inv_depth = self.model_wrapper.depth(rgb_image)[0]
-        depth_img = self.write_depth(self.inv2depth(pred_inv_depth))
+        # Depth inference (returns predicted inverse depth)
+        pred_inv_depth = self.model_wrapper.depth(rgb_image)
+
+        # resize from PIL image and cv2 has different convention about the image shape 
+
+        pred_inv_depth_resized = interpolate_image(pred_inv_depth, (self.original_input_shape[0], self.original_input_shape[1]), mode='bicubic')
+        
+        # convert inverse depth to depth image
+        depth_img = self.write_depth(self.inv2depth(pred_inv_depth_resized))
+        print(rgb_img_msg.header.seq)
+        filename = "/home/jedsadakorn/packnet_ws/src/packnet_sfm/inferences/test/{:06d}.png".format(rgb_img_msg.header.seq)
+        cv2.imwrite(filename, depth_img)
+
         depth_img_msg = self.bridge.cv2_to_imgmsg(depth_img, encoding="mono16")
+
+        rgb_img_msg.header.stamp = rospy.Time.now()
+        depth_img_msg.header.stamp = rospy.Time.now()
+        rgb_img_msg.header.frame_id = "left_image"
+        depth_img_msg.header.frame_id = "left_image"
 
         self.pub_rgb_image.publish(rgb_img_msg)
         self.pub_depth_image.publish(depth_img_msg)
@@ -110,7 +129,6 @@ class DepthInference:
         if is_seq(inv_depth):
             return [inv2depth(item) for item in inv_depth]
         else:
-            # return 1. / inv_depth.clamp(min=1e-6, max=80)
             return 1. / inv_depth
 
 
@@ -127,26 +145,18 @@ class DepthInference:
         """
         # If depth is a tensor
         if is_tensor(depth):
-            depth = depth.detach().squeeze().cpu()  # This is the bottle neck of 300mss
-            depth = depth.numpy()
-            depth = cv2.resize(src=depth, dsize=(self.input_image_shape[1], self.input_image_shape[0]))
-            depth = np.clip(depth, 0, 80)
+            depth = depth.detach().squeeze().cpu()
+            depth = np.clip(depth, 0, 100)
             depth = np.uint16(depth * 256)
-
-            # cv2.imwrite("/home/jedsadakorn/packnet_ws/src/packnet_sfm/inferences/test.png", depth)
 
         return depth
 
     def cb_image(self, data):
         rospy.loginfo(data.header.seq)
         self.rgb_img_msg = data
-        self.input_image_shape = (data.height, data.width)
-        print(self.input_image_shape)
+        self.original_input_shape = (data.height, data.width)
 
-
-    
 
 if __name__ == "__main__":
     rospy.init_node('packnet_sfm_node')
-    
     depth_inference_node = DepthInference()
