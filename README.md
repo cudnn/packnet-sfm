@@ -1,5 +1,48 @@
 ## Pre-requisite
-1) Configure ROS to be able to use with Python3 and cv_bridge following this [link](https://medium.com/@beta_b0t/how-to-setup-ros-with-python-3-44a69ca36674)
+1) Configure ROS to be able to use with Python3 and cv_bridge following this [link](https://medium.com/@beta_b0t/how-to-setup-ros-with-python-3-44a69ca36674
+```bash
+sudo apt-get install python3-pip python3-yaml
+sudo pip3 install rospkg catkin_pkg
+sudo apt-get install python-catkin-tools python3-dev python3-numpy
+
+# Install cv_bridge for python3
+cd 
+mkdir -p packnet_ws/src
+cd packnet_ws/src
+git clone -b melodic https://github.com/ros-perception/vision_opencv.git
+
+# Config the workspace to work with python3
+cd packnet_ws
+catkin config -DPYTHON_EXECUTABLE=/usr/bin/python3 -DPYTHON_INCLUDE_DIR=/usr/include/python3.6m -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.6m.so
+catkin config --install
+catkin build
+
+# we need to always source this directory, after building
+source install/setup.bash --extend 
+```
+## Quick Start
+1) Download packnet_sfm_ros repro
+```bash
+cd ~/packnet_ws/src
+git clone https://github.com/surfii3z/packnet_sfm_ros.git
+```
+
+2) Download the pre-train model to packnet_sfm_ros/src/packnet_sfm/models
+```bash
+cd packnet_ws/src/packnet_sfm_ros/src/packnet_sfm/
+mkdir models
+cd models
+
+# For example: download PackNet, Self-Supervised Scale-Aware, 192x640, CS → K
+wget https://tri-ml-public.s3.amazonaws.com/github/packnet-sfm/models/PackNet01_MR_velsup_CStoK.ckpt
+```
+
+2) Build the package
+```bash
+
+catkin build
+```
+
 ___________________________________________________________________________________________________________________
 # BELOW IS THE ORIGINAL README from the original repo
 ## PackNet-SfM: 3D Packing for Self-Supervised Monocular Depth Estimation
