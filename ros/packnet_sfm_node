@@ -31,12 +31,13 @@ class DepthInference:
         self.network_input_shape = None
         self.original_input_shape = None
         self.rgb_img_msg = None
+        self.rgb_counter = 0
         self.depth_img_msg = None
         self.set_model_wrapper()
 
         # Communication
-        self.pub_rgb_image = rospy.Publisher('/camera/color/image_raw', Image, queue_size=1)
-        self.pub_depth_image = rospy.Publisher('/camera/depth/image_raw', Image, queue_size=1)
+        self.pub_rgb_image = rospy.Publisher('/camera/color/image_raw', Image, queue_size=None)
+        self.pub_depth_image = rospy.Publisher('/camera/depth/image_raw', Image, queue_size=None)
 
         # queue_size=None to process only the last message
         rospy.Subscriber("/video/image_raw", Image, self.cb_image, queue_size=1)
@@ -47,8 +48,8 @@ class DepthInference:
             # Error Handler: when it is not initialized
             if self.rgb_img_msg is None:
                 continue
-
-            rospy.loginfo(self.rgb_img_msg.header.seq)
+            
+            rospy.loginfo("In the loop: {}".format(self.rgb_img_msg.header.seq))
 
             self.process(self.rgb_img_msg)
             rate.sleep()
@@ -164,7 +165,10 @@ class DepthInference:
     def cb_image(self, data):
         # rospy.loginfo(data.header.seq)
         self.rgb_img_msg = data
+        self.rgb_img_msg.header.seq = self.rgb_counter
         self.original_input_shape = (data.height, data.width)
+        self.rgb_counter += 1
+        rospy.loginfo("cb_image: {}".format(self.rgb_counter))
 
 
 if __name__ == "__main__":
