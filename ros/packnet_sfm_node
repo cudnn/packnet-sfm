@@ -35,16 +35,20 @@ class DepthInference:
         self.set_model_wrapper()
 
         # Communication
-        self.pub_rgb_image = rospy.Publisher('/camera/color/image_raw', Image, queue_size=100)
-        self.pub_depth_image = rospy.Publisher('/camera/depth/image_raw', Image, queue_size=100)
+        self.pub_rgb_image = rospy.Publisher('/camera/color/image_raw', Image, queue_size=1)
+        self.pub_depth_image = rospy.Publisher('/camera/depth/image_raw', Image, queue_size=1)
 
         # queue_size=None to process only the last message
         rospy.Subscriber("/video/image_raw", Image, self.cb_image, queue_size=1)
 
         rate = rospy.Rate(10) # 10hz
         while not rospy.is_shutdown():
+            
+            # Error Handler: when it is not initialized
             if self.rgb_img_msg is None:
                 continue
+
+            rospy.loginfo(self.rgb_img_msg.header.seq)
 
             self.process(self.rgb_img_msg)
             rate.sleep()
@@ -97,9 +101,9 @@ class DepthInference:
         
         # convert inverse depth to depth image
         depth_img = self.write_depth(self.inv2depth(pred_inv_depth_resized))
-        print(rgb_img_msg.header.seq)
-        filename = "/home/jedsadakorn/packnet_ws/src/packnet_sfm/inferences/test/{:06d}.png".format(rgb_img_msg.header.seq)
-        cv2.imwrite(filename, depth_img)
+        # print(rgb_img_msg.header.seq)
+        # filename = "/home/jedsadakorn/packnet_ws/src/packnet_sfm/inferences/test/{:06d}.png".format(rgb_img_msg.header.seq)
+        # cv2.imwrite(filename, depth_img)
 
         depth_img_msg = self.bridge.cv2_to_imgmsg(depth_img, encoding="mono16")
 
@@ -107,9 +111,15 @@ class DepthInference:
         depth_img_msg.header.stamp = rospy.Time.now()
         rgb_img_msg.header.frame_id = "left_image"
         depth_img_msg.header.frame_id = "left_image"
+        depth_img_msg.header.seq = rgb_img_msg.header.seq
+
+        
 
         self.pub_rgb_image.publish(rgb_img_msg)
         self.pub_depth_image.publish(depth_img_msg)
+
+        rospy.loginfo("In process color: {}".format(rgb_img_msg.header.seq))
+        rospy.loginfo("In process depth: {}".format(depth_img_msg.header.seq))
 
 
     def inv2depth(self, inv_depth):
@@ -152,7 +162,7 @@ class DepthInference:
         return depth
 
     def cb_image(self, data):
-        rospy.loginfo(data.header.seq)
+        # rospy.loginfo(data.header.seq)
         self.rgb_img_msg = data
         self.original_input_shape = (data.height, data.width)
 
