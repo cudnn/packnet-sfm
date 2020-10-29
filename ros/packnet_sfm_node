@@ -42,18 +42,7 @@ class DepthInference:
         # queue_size=None to process only the last message
         rospy.Subscriber("/video/image_raw", Image, self.cb_image, queue_size=1)
 
-        rate = rospy.Rate(10) # 10hz
-        while not rospy.is_shutdown():
-            
-            # Error Handler: when it is not initialized
-            if self.rgb_img_msg is None:
-                continue
-            
-            rospy.loginfo("In the loop: {}".format(self.rgb_img_msg.header.seq))
-
-            self.process(self.rgb_img_msg)
-            rate.sleep()
-
+        rospy.spin()
 
     def set_model_wrapper(self):
 
@@ -164,11 +153,12 @@ class DepthInference:
 
     def cb_image(self, data):
         # rospy.loginfo(data.header.seq)
-        self.rgb_img_msg = data
-        self.rgb_img_msg.header.seq = self.rgb_counter
+        # self.rgb_img_msg = data
+        data.header.seq = self.rgb_counter
         self.original_input_shape = (data.height, data.width)
         self.rgb_counter += 1
         rospy.loginfo("cb_image: {}".format(self.rgb_counter))
+        self.process(data)
 
 
 if __name__ == "__main__":
