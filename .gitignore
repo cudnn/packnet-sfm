@@ -106,4 +106,4 @@ venv.bak/
 inferences/
 data/
 .vscode/
-models/
+trained_models/
