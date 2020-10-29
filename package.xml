@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>packnet_sfm</name>
+  <name>packnet_sfm_ros</name>
   <version>0.0.0</version>
   <description>The packnet_sfm package</description>
 
-  <maintainer email="jedsadakorn@todo.todo">jedsadakorn</maintainer>
+  <maintainer email="j.yonchor@kaist.ac.kr">Jedsadakorn Yonchorhor</maintainer>
 
   <license>TODO</license>
 
