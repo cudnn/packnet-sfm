@@ -1,3 +1,7 @@
+## Pre-requisite
+1) Configure ROS to be able to use with Python3 and cv_bridge following this [link](https://medium.com/@beta_b0t/how-to-setup-ros-with-python-3-44a69ca36674)
+___________________________________________________________________________________________________________________
+# BELOW IS THE ORIGINAL README from the original repo
 ## PackNet-SfM: 3D Packing for Self-Supervised Monocular Depth Estimation
 
 [Install](#install) // [Datasets](#datasets) // [Training](#training) // [Evaluation](#evaluation) // [Models](#models) // [License](#license) // [References](#references)
