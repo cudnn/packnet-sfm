@@ -36,11 +36,17 @@ cd models
 # For example: download PackNet, Self-Supervised Scale-Aware, 192x640, CS → K
 wget https://tri-ml-public.s3.amazonaws.com/github/packnet-sfm/models/PackNet01_MR_velsup_CStoK.ckpt
 ```
+3) Change the model name in this [line](https://github.com/surfii3z/packnet_sfm_ros/blob/1e07bfc83ef1e7946644f33d69e3805452898113/ros/packnet_sfm_node#L27) of the packnet_sfm_node file
 
-2) Build the package
+4) Build the package
 ```bash
 
 catkin build
+```
+
+5) Try to run the node
+```bash
+rosrun packnet_sfm_ros packnet_sfm_node
 ```
 
 ___________________________________________________________________________________________________________________
