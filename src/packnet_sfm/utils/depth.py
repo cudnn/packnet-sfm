@@ -1,6 +1,7 @@
 # Copyright 2020 Toyota Research Institute.  All rights reserved.
-
+import time
 import numpy as np
+import cv2
 import torch
 import torchvision.transforms as transforms
 from matplotlib.cm import get_cmap
@@ -36,6 +37,8 @@ def write_depth(filename, depth, intrinsics=None):
     """
     Write a depth map to file, and optionally its corresponding intrinsics.
 
+    This code is modified to export compatible-format depth image to openVSLAM
+
     Parameters
     ----------
     filename : str
@@ -47,7 +50,17 @@ def write_depth(filename, depth, intrinsics=None):
     """
     # If depth is a tensor
     if is_tensor(depth):
-        depth = depth.detach().squeeze().cpu()
+        # torch.cuda.synchronize()
+        # start_time = time.perf_counter()
+        depth = depth.detach().squeeze().cpu()  # This is the bottle neck of 300mss
+        torch.cuda.synchronize()
+        # end_time = time.perf_counter()
+        # print("The download from gpu ", end_time - start_time)
+        depth2 = depth.numpy()
+        depth2 = cv2.resize(src=depth2, dsize=(1226, 370))
+        # print(depth2.shape)
+        depth2 = np.clip(depth2, 0, 80)
+
     # If intrinsics is a tensor
     if is_tensor(intrinsics):
         intrinsics = intrinsics.detach().cpu()
@@ -56,8 +69,11 @@ def write_depth(filename, depth, intrinsics=None):
         np.savez_compressed(filename, depth=depth, intrinsics=intrinsics)
     # If we are saving as a .png
     elif filename.endswith('.png'):
-        depth = transforms.ToPILImage()((depth * 256).int())
-        depth.save(filename)
+        # depth = transforms.ToPILImage()((depth * 256).int())
+        # depth.save(filename)
+
+        depth2 = np.uint16(depth2 * 256)
+        cv2.imwrite(filename, depth2)
     # Something is wrong
     else:
         raise NotImplementedError('Depth filename not valid.')
@@ -117,7 +133,8 @@ def inv2depth(inv_depth):
     if is_seq(inv_depth):
         return [inv2depth(item) for item in inv_depth]
     else:
-        return 1. / inv_depth.clamp(min=1e-6)
+        # return 1. / inv_depth.clamp(min=1e-6, max=80)
+        return 1. / inv_depth
 
 
 def depth2inv(depth):
