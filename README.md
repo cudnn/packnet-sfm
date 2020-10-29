@@ -1,5 +1,5 @@
 ## Pre-requisite
-1) Configure ROS to be able to use with Python3 and cv_bridge following this [link](https://medium.com/@beta_b0t/how-to-setup-ros-with-python-3-44a69ca36674
+1) Configure ROS to be able to use with Python3 and cv_bridge following this [link](https://medium.com/@beta_b0t/how-to-setup-ros-with-python-3-44a69ca36674)
 ```bash
 sudo apt-get install python3-pip python3-yaml
 sudo pip3 install rospkg catkin_pkg
