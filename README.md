@@ -27,11 +27,11 @@ cd ~/packnet_ws/src
 git clone https://github.com/surfii3z/packnet_sfm_ros.git
 ```
 
-2) Download the pre-train model to packnet_sfm_ros/src/packnet_sfm/models
+2) Download the pre-train model to packnet_sfm_ros/src/packnet_sfm/trained_models
 ```bash
 cd packnet_ws/src/packnet_sfm_ros/src/packnet_sfm/
-mkdir models
-cd models
+mkdir trained_models
+cd trained_models
 
 # For example: download PackNet, Self-Supervised Scale-Aware, 192x640, CS → K
 wget https://tri-ml-public.s3.amazonaws.com/github/packnet-sfm/models/PackNet01_MR_velsup_CStoK.ckpt
