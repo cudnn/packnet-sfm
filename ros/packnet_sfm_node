@@ -25,6 +25,7 @@ from packnet_sfm.utils.logging import pcolor
 from packnet_sfm.utils.types import is_seq, is_tensor
 
 MODEL_NAME = "PackNet01_MR_velsup_CStoK.ckpt"
+starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
 
 class DepthInference:
     def __init__(self):
@@ -42,7 +43,6 @@ class DepthInference:
         self.pub_rgb_image = rospy.Publisher('/camera/color/image_raw', Image, queue_size=None)
         self.pub_depth_image = rospy.Publisher('/camera/depth/image_raw', Image, queue_size=None)
 
-        
         rospy.Subscriber("/video/image_raw", Image, self.cb_image, queue_size=1)
 
         rospy.spin()
@@ -74,7 +74,8 @@ class DepthInference:
 
 
     def process(self, rgb_img_msg):
-
+        starter.record()
+        rospy.loginfo("process seq: {}".format(rgb_img_msg.header.seq))
         try:
             rgb_image = self.bridge.imgmsg_to_cv2(rgb_img_msg, "bgr8")
         except CvBridgeError as e:
@@ -109,6 +110,12 @@ class DepthInference:
         # publish the image and depth_image
         self.pub_rgb_image.publish(rgb_img_msg)
         self.pub_depth_image.publish(depth_img_msg)
+
+        ender.record()
+
+        torch.cuda.synchronize()
+        process_time = starter.elapsed_time(ender)
+        rospy.loginfo("process time: {}".format(process_time))
 
     def inv2depth(self, inv_depth):
         """
@@ -153,10 +160,11 @@ class DepthInference:
         return depth
 
     def cb_image(self, data):
-        data.header.seq = self.rgb_counter
+        rospy.loginfo("cb_image: {}".format(self.rgb_counter))
+        
         self.original_input_shape = (data.height, data.width)
         self.rgb_counter += 1
-        rospy.loginfo("cb_image: {}".format(self.rgb_counter))
+        
         self.process(data)
 
 
