@@ -46,7 +46,7 @@ git clone https://github.com/surfii3z/packnet_sfm_ros.git
 
 2) Download the pre-train model to packnet_sfm_ros/src/packnet_sfm/trained_models
 ```bash
-cd ~/packnet_ws/src/packnet_sfm_ros/src/packnet_sfm/
+cd ~/packnet_ws/src/packnet_sfm_ros
 mkdir trained_models
 cd trained_models
 
