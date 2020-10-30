@@ -20,6 +20,23 @@ catkin build
 # we need to always source this directory, after building
 source install/setup.bash --extend 
 ```
+
+2) Install some dependencies
+> pytorch: [link](https://pytorch.org/get-started/locally/)
+
+> yacs
+
+```pip3 install yacs```
+
+> matplotlib
+
+```pip3 install yacs```
+
+>termcolor
+
+```pip3 install termcolor```
+
+
 ## Quick Start
 1) Download packnet_sfm_ros repro
 ```bash
@@ -29,7 +46,7 @@ git clone https://github.com/surfii3z/packnet_sfm_ros.git
 
 2) Download the pre-train model to packnet_sfm_ros/src/packnet_sfm/trained_models
 ```bash
-cd packnet_ws/src/packnet_sfm_ros/src/packnet_sfm/
+cd ~/packnet_ws/src/packnet_sfm_ros/src/packnet_sfm/
 mkdir trained_models
 cd trained_models
 
