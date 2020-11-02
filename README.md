@@ -24,18 +24,9 @@ source install/setup.bash --extend
 2) Install some dependencies
 > pytorch: [link](https://pytorch.org/get-started/locally/)
 
-> yacs
+> yacs, matplotlib, termcolor
 
-```pip3 install yacs```
-
-> matplotlib
-
-```pip3 install yacs```
-
->termcolor
-
-```pip3 install termcolor```
-
+```pip3 install yacs matplotlib termcolor```
 
 ## Quick Start
 1) Download packnet_sfm_ros repro
