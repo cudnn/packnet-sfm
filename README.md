@@ -66,6 +66,14 @@ catkin build
 rosrun packnet_sfm_ros packnet_sfm_node
 ```
 
+# Results
+
+1) Kitti Odom seq 09 with 7DOF alignment with the ground truth (click the picture to go to the result video)
+
+<a href="https://youtu.be/QPy7ygm_McE" target="_blank">
+<img align="center" src="/media/figs/odometry_vs_GT_with_a_s_option.png" width="50%"/>
+</a>
+
 ___________________________________________________________________________________________________________________
 # BELOW IS THE ORIGINAL README from the original repo
 ## PackNet-SfM: 3D Packing for Self-Supervised Monocular Depth Estimation
