@@ -24,9 +24,9 @@ source install/setup.bash --extend
 2) Install some dependencies
 > pytorch: [link](https://pytorch.org/get-started/locally/)
 
-> yacs, matplotlib, termcolor, horovod
+> yacs, matplotlib, termcolor, horovod, tqdm, wandb (basically everything with ModuleNotFoundError)
 
-```pip3 install yacs matplotlib termcolor horovod```
+```pip3 install yacs matplotlib termcolor horovod tqdm wandb```
 
 ## Quick Start
 1) Download packnet_sfm_ros repro
