@@ -24,9 +24,9 @@ source install/setup.bash --extend
 2) Install some dependencies
 > pytorch: [link](https://pytorch.org/get-started/locally/)
 
-> yacs, matplotlib, termcolor
+> yacs, matplotlib, termcolor, horovod
 
-```pip3 install yacs matplotlib termcolor```
+```pip3 install yacs matplotlib termcolor horovod```
 
 ## Quick Start
 1) Download packnet_sfm_ros repro
