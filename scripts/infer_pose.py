@@ -4,7 +4,8 @@ import argparse
 import numpy as np
 import os
 import torch
-import time
+from pytorch3d import transforms
+import json
 
 from glob import glob
 from cv2 import imwrite
@@ -18,11 +19,11 @@ from packnet_sfm.utils.load import set_debug
 from packnet_sfm.utils.depth import write_depth, inv2depth, viz_inv_depth
 from packnet_sfm.utils.logging import pcolor
 
+poses = dict()
 
 def is_image(file, ext=('.png', '.jpg',)):
     """Check if a file is an image with certain extensions"""
     return file.endswith(ext)
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description='PackNet-SfM inference of depth maps from images')
@@ -35,6 +36,10 @@ def parse_args():
     parser.add_argument('--half', action="store_true", help='Use half precision (fp16)')
     parser.add_argument('--save', type=str, choices=['npz', 'png'], default=None,
                         help='Save format (npz or png). Default is None (no depth map is saved).')
+    parser.add_argument('--limit', type=int, default=None,
+                        help='Limit the amount of files to process in folder')
+    parser.add_argument('--offset', type=int, default=None,
+                        help='Start at offset for files to process in folder')
     args = parser.parse_args()
     assert args.checkpoint.endswith('.ckpt'), \
         'You need to provide a .ckpt file as checkpoint'
@@ -47,16 +52,16 @@ def parse_args():
 
 
 @torch.no_grad()
-def infer_and_save_depth(input_file, output_file, model_wrapper, image_shape, half, save):
+def infer_and_save_pose(input_file_refs, input_file, model_wrapper, image_shape, half, save):
     """
     Process a single input file to produce and save visualization
 
     Parameters
     ----------
+    input_file_refs : list(str)
+        Reference image file paths
     input_file : str
-        Image file
-    output_file : str
-        Output file, or folder where the output will be saved
+        Image file for pose estimation
     model_wrapper : nn.Module
         Model wrapper used for inference
     image_shape : Image shape
@@ -66,53 +71,31 @@ def infer_and_save_depth(input_file, output_file, model_wrapper, image_shape, ha
     save: str
         Save format (npz or png)
     """
-    # torch.cuda.synchronize()
-    # start_time = time.perf_counter()
-
-    if not is_image(output_file):
-        # If not an image, assume it's a folder and append the input name
-        os.makedirs(output_file, exist_ok=True)
-        output_file = os.path.join(output_file, os.path.basename(input_file))
+    base_name = os.path.basename(input_file)
 
     # change to half precision for evaluation if requested
     dtype = torch.float16 if half else None
 
     # Load image
-    image = load_image(input_file)
-    # Resize and to tensor
-    image = resize_image(image, image_shape)
-    image = to_tensor(image).unsqueeze(0)
-
-    # Send image to GPU if available
-    if torch.cuda.is_available():
-        image = image.to('cuda:{}'.format(rank()), dtype=dtype)
+    def process_image(filename):
+        image = load_image(filename)
+        # Resize and to tensor
+        image = resize_image(image, image_shape)
+        image = to_tensor(image).unsqueeze(0)
+        
+        # Send image to GPU if available
+        if torch.cuda.is_available():
+            image = image.to('cuda:{}'.format(rank()), dtype=dtype)
+        return image
+    image_ref = [process_image(input_file_ref) for input_file_ref in input_file_refs]
+    image = process_image(input_file)
 
     # Depth inference (returns predicted inverse depth)
-    pred_inv_depth = model_wrapper.depth(image)[0]
-
-    if save == 'npz' or save == 'png':
-        # Get depth from predicted depth map and save to different formats
-        filename = '{}.{}'.format(os.path.splitext(output_file)[0], save)
-        print('Saving {} to {}'.format(
-            pcolor(input_file, 'cyan', attrs=['bold']),
-            pcolor(filename, 'magenta', attrs=['bold'])))
-        write_depth(filename, depth=inv2depth(pred_inv_depth))
-    else:
-        # Prepare RGB image
-        rgb = image[0].permute(1, 2, 0).detach().cpu().numpy() * 255
-        # Prepare inverse depth
-        viz_pred_inv_depth = viz_inv_depth(pred_inv_depth[0]) * 255
-        # Concatenate both vertically
-        image = np.concatenate([rgb, viz_pred_inv_depth], 0)
-        # Save visualization
-        print('Saving {} to {}'.format(
-            pcolor(input_file, 'cyan', attrs=['bold']),
-            pcolor(output_file, 'magenta', attrs=['bold'])))
-        imwrite(output_file, image[:, :, ::-1])
+    pose_tensor = model_wrapper.pose(image, image_ref)[0][0]  # take the pose from 1st to 2nd image
+    rot_matrix = transforms.euler_angles_to_matrix(pose_tensor[3:], convention="ZYX")
+    translation = pose_tensor[:3]
     
-    # torch.cuda.synchronize()
-    # end_time = time.perf_counter()
-    # print("Inference time ", end_time - start_time)
+    poses[base_name] = (rot_matrix, translation)
 
 def main(args):
 
@@ -153,13 +136,60 @@ def main(args):
         files.sort()
         print0('Found {} files'.format(len(files)))
     else:
-        # Otherwise, use it as is
-        files = [args.input]
+        raise RuntimeError("Input needs directory, not file")
+
+    if not os.path.isdir(args.output):
+        root, file_name = os.path.split(args.output)
+        os.makedirs(root, exist_ok=True)
+    else:
+        raise RuntimeError("Output needs to be a file")
+        
 
     # Process each file
-    for fn in files[rank()::world_size()]:
-        infer_and_save_depth(
-            fn, args.output, model_wrapper, image_shape, args.half, args.save)
+    list_of_files = list(zip(files[rank()  :-2:world_size()],
+                              files[rank()+1:-1:world_size()],
+                              files[rank()+2:  :world_size()]))
+    if args.offset:
+        list_of_files = list_of_files[args.offset:]
+    if args.limit:
+        list_of_files = list_of_files[:args.limit]
+    for fn1, fn2, fn3 in list_of_files:
+        infer_and_save_pose([fn1, fn3], fn2, model_wrapper, image_shape, args.half, args.save)
+
+    position = np.zeros(3)
+    orientation = np.eye(3)
+    f = open(args.output + ".txt", 'w')
+
+    for key in sorted(poses.keys()):
+        
+        rot_matrix, translation = poses[key]
+
+        # print(rot_matrix, translation)
+
+        # print("orientation, position")
+        orientation = orientation.dot(rot_matrix.tolist())
+        position += orientation.dot(translation.tolist())
+
+        # print(torch.tensor(orientation))
+        q = transforms.matrix_to_quaternion(torch.tensor(orientation))
+        q = q.numpy()
+        # print(q[0])
+        # print(position)
+
+        f.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f\n" % (position[0], position[1], position[2], q[0][3], q[0][2], q[0][1], q[0][0]))
+        # f.write("{.10f} {.10f} {.10f} {.10f} {.10f} {.10f} {.10f}"
+                # .format(position[0], position[1], position[2], q[0][1], q[0][2], q[0][3], q[0][0]))
+        # poses[key] = {"rot": rot_matrix.tolist(),
+        #               "trans": translation.tolist(),
+        #               "pose": [*orientation[0], position[0],
+        #                        *orientation[1], position[1],
+        #                        *orientation[2], position[2],
+        #                        0, 0, 0, 1]}
+
+    f.close()
+                               
+    # json.dump(poses, open(args.output, "w"), sort_keys=True)
+    print(f"Written pose of {len(list_of_files)} images to {args.output}")
 
 
 if __name__ == '__main__':
